@@ -3,7 +3,7 @@ package collectors
 import (
 	"encoding/csv"
 	"fmt"
-	"os"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -11,19 +11,36 @@ import (
 	"bosun.org/opentsdb"
 )
 
-func init() {
-	collectors = append(collectors, &IntervalCollector{F: c_haproxy_csv})
+// HAProxy registers an HAProxy collector.
+func HAProxy(user, pwd, url, tier string) {
+	collectors = append(collectors, &IntervalCollector{
+		F: func() (opentsdb.MultiDataPoint, error) {
+			return c_haproxy_csv(user, pwd, url)
+		},
+		name: fmt.Sprintf("haproxy-%s", url, tier),
+	})
 }
 
-func c_haproxy_csv() (opentsdb.MultiDataPoint, error) {
+func c_haproxy_csv(user, pwd, url, tier string) (opentsdb.MultiDataPoint, error) {
 	var md opentsdb.MultiDataPoint
 	const metric = "haproxy"
-	csvFile, err := os.Open("/ha.csv")
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer csvFile.Close()
-	reader := csv.NewReader(csvFile)
+	req.SetBasicAuth(user, pwd)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	//csvFile, err := os.Open("/ha.csv")
+	if err != nil {
+		return nil, err
+	}
+	//defer csvFile.Close()
+	reader := csv.NewReader(resp.Body)
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
@@ -43,7 +60,7 @@ func c_haproxy_csv() (opentsdb.MultiDataPoint, error) {
 		return i, nil
 	}
 	for _, rec := range records[1:] {
-		//There is a trailing comma in haproxy's csv
+		// There is a trailing comma in haproxy's csv
 		if len(rec) != len(haproxyCsvMeta)+1 {
 			return nil, fmt.Errorf("expected %v lines. got: %v",
 				len(haproxyCsvMeta)+1, len(rec))
@@ -52,7 +69,9 @@ func c_haproxy_csv() (opentsdb.MultiDataPoint, error) {
 		pxname := rec[0]
 		svname := rec[1]
 		ts := opentsdb.TagSet{"pxname": pxname, "svname": svname}
+		// TODO MERGE IN INSTANCE TAG
 		for i, field := range haproxyCsvMeta {
+			m := strings.Join([]string{metric, hType, field.Name}, ".")
 			switch i {
 			case 0, 1, 26, 27, 28, 31, 32, 56, 57:
 				continue
@@ -62,7 +81,7 @@ func c_haproxy_csv() (opentsdb.MultiDataPoint, error) {
 					return nil, fmt.Errorf("unexpected field name %v in hrsp", field.Name)
 				}
 				ts := ts.Copy().Merge(opentsdb.TagSet{"status_code": sp[1]})
-				m := strings.Join([]string{metric, hType, sp[0]}, ".")
+				m = strings.Join([]string{metric, hType, sp[0]}, ".")
 				v, err := parse(rec[i])
 				if err != nil {
 					return nil, err
@@ -70,18 +89,27 @@ func c_haproxy_csv() (opentsdb.MultiDataPoint, error) {
 				Add(&md, m, v, ts, metadata.Counter, metadata.Response,
 					fmt.Sprintf("The number of http responses with a %v status code.", sp[1]))
 			case 17:
-				//Fill in status stuff, Also update desc to include numbers
-				continue
+				v, ok := haproxyStatus[rec[i]]
+				// Not distinging between MAINT and MAINT via...
+				if !ok {
+					v = 3
+				}
+				Add(&md, m, v, ts, field.RateType, field.Unit, field.Desc)
 			case 36:
-				//Fill in check status stuff
-				continue
+				if rec[i] == "" {
+					continue
+				}
+				v, ok := haproxyCheckStatus[rec[i]]
+				if !ok {
+					return nil, fmt.Errorf("unknown check status %v", rec[i])
+				}
+				Add(&md, m, v, ts, field.RateType, field.Unit, field.Desc)
 			default:
 				v, err := parse(rec[i])
 				if err != nil {
 					return nil, err
 				}
-				m := strings.Join([]string{metric, hType, field.Name}, ".")
-				Add(&md, m, v, ts, haproxyCsvMeta[i].RateType, field.Unit, field.Desc)
+				Add(&md, m, v, ts, field.RateType, field.Unit, field.Desc)
 			}
 		}
 	}
@@ -115,6 +143,13 @@ var haproxyCheckStatus = map[string]float64{
 	"L7TOUT":  11,
 	"L7RSP":   12,
 	"L7STS":   13,
+}
+
+var haproxyStatus = map[string]float64{
+	"UP":    0,
+	"DOWN":  1,
+	"NOLB":  2,
+	"MAINT": 3,
 }
 
 var haproxyCsvMeta = []MetricMetaName{
@@ -216,7 +251,10 @@ var haproxyCsvMeta = []MetricMetaName{
 		}},
 	MetricMetaName{
 		Name: "status",
-	},
+		MetricMeta: MetricMeta{RateType: metadata.Gauge,
+			Unit: metadata.Weight,
+			Desc: "The current status: 0->UP, 1->Down, 2->NOLB, 3->Maintenance.",
+		}},
 	MetricMetaName{
 		Name: "weight",
 		MetricMeta: MetricMeta{RateType: metadata.Gauge,

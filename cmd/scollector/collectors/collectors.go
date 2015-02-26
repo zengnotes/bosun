@@ -22,6 +22,10 @@ type Collector interface {
 	Init()
 }
 
+var (
+	KeepAliveCommunity = "public"
+)
+
 const (
 	osCPU          = "os.cpu"
 	osDiskFree     = "os.disk.fs.space_free"
