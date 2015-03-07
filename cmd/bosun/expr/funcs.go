@@ -704,27 +704,36 @@ func timeLSRequest(e *State, T miniprofiler.Timer, service *elastic.SearchServic
 
 func Change(e *State, T miniprofiler.Timer, query, sduration, eduration string) (r *Results, err error) {
 	r = new(Results)
-	sd, err := opentsdb.ParseDuration(sduration)
-	if err != nil {
-		return
-	}
-	var ed opentsdb.Duration
-	if eduration != "" {
-		ed, err = opentsdb.ParseDuration(eduration)
-		if err != nil {
-			return
-		}
-	}
 	r, err = Query(e, T, query, sduration, eduration)
 	if err != nil {
 		return
 	}
-	r, err = reduce(e, T, r, change, (sd - ed).Seconds())
+	r, err = reduce(e, T, r, change)
 	return
 }
 
+//Note this will not work with transposing
 func change(dps Series, args ...float64) float64 {
-	return avg(dps) * args[0]
+	length := len(dps)
+	if length < 1 {
+		return 0
+	}
+	ss := NewSortedSeries(dps)
+	var start = ss[0].V
+	var total float64
+	var reset bool
+	for i := 1; i < length-1; i++ {
+		// If the counter reset
+		if ss[i].V < ss[i-1].V {
+			total += ss[i-1].V - start
+			start = ss[i].V
+			reset = true
+		}
+	}
+	if reset {
+		return total
+	}
+	return ss[length-1].V - ss[0].V
 }
 
 func Diff(e *State, T miniprofiler.Timer, query, sduration, eduration string) (r *Results, err error) {
