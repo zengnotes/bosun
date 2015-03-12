@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +188,7 @@ func Add(metric string, ts opentsdb.TagSet, inc int64) error {
 	tss := metric + ts.String()
 	mlock.Lock()
 	if counters[tss] == nil {
+		fmt.Println(tss)
 		counters[tss] = &addMetric{
 			metric: metric,
 			ts:     ts.Copy(),
@@ -195,6 +197,51 @@ func Add(metric string, ts opentsdb.TagSet, inc int64) error {
 	counters[tss].value += inc
 	mlock.Unlock()
 	return nil
+}
+
+// Get fetches the current value of of the specified metric. This is
+// because it makes instrumented parts of code available to testing
+func Get(name string, ts opentsdb.TagSet) (float64, bool, error) {
+	var b bool
+	if err := check(name, &ts); err != nil {
+		return 0, b, err
+	}
+	name = name + ts.String()
+	mlock.Lock()
+	var v interface{}
+	fmt.Println(counters)
+	if _, ok := counters[name]; ok {
+		v = counters[name].value
+		b = ok
+	}
+	if _, ok := sets[name]; ok {
+		v = sets[name].f()
+		b = ok
+	}
+	if _, ok := puts[name]; ok {
+		v = puts[name].value
+		b = ok
+	}
+	mlock.Unlock()
+	if !b {
+		return 0, b, nil
+	}
+	switch t := v.(type) {
+	case int32:
+		return float64(t), b, nil
+	case int64:
+		return float64(t), b, nil
+	case float32:
+		return float64(t), b, nil
+	case float64:
+		return t, b, nil
+	case string:
+		v, err := strconv.ParseFloat(t, 64)
+		return v, b, err
+	default:
+		return 0, b, fmt.Errorf("unexpected type as collect value")
+	}
+
 }
 
 type putMetric struct {

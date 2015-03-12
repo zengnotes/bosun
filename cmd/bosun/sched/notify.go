@@ -9,6 +9,7 @@ import (
 
 	"bosun.org/cmd/bosun/conf"
 	"bosun.org/cmd/bosun/expr"
+	"bosun.org/collect"
 )
 
 // Poll dispatches notification checks when needed.
@@ -40,10 +41,6 @@ func (s *Schedule) CheckNotifications() time.Duration {
 	notifications := s.Notifications
 	s.Notifications = nil
 	for ak, ns := range notifications {
-		if _, present := silenced[ak]; present {
-			log.Println("silencing", ak)
-			continue
-		}
 		for name, t := range ns {
 			n, present := s.Conf.Notifications[name]
 			if !present {
@@ -93,13 +90,16 @@ func (s *Schedule) sendNotifications(silenced map[expr.AlertKey]Silence) {
 			if st.Last().Status == StUnknown {
 				if silenced {
 					log.Println("silencing unknown", ak)
+					collect.Add("notifications.silenced", nil, 1)
 					continue
 				}
 				ustates[ak] = st
 			}
 			if silenced {
 				log.Println("silencing", ak)
+				collect.Add("notifications.silenced", nil, 1)
 			} else {
+				collect.Add("notifications.sent", nil, 1)
 				s.notify(st, n)
 			}
 			if n.Next != nil {
