@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"bosun.org/_third_party/github.com/olivere/elastic"
@@ -717,7 +718,7 @@ func Change(e *State, T miniprofiler.Timer, query, sduration, eduration string) 
 	if err != nil {
 		return
 	}
-	r, err = reduce(e, T, r, change, (sd - ed).Seconds())
+	r, err = reduce(e, T, r, false, change, (sd - ed).Seconds())
 	return
 }
 
@@ -730,7 +731,7 @@ func Diff(e *State, T miniprofiler.Timer, query, sduration, eduration string) (r
 	if err != nil {
 		return
 	}
-	r, err = reduce(e, T, r, diff)
+	r, err = reduce(e, T, r, false, diff)
 	return
 }
 
@@ -738,20 +739,52 @@ func diff(dps Series, args ...float64) float64 {
 	return last(dps) - first(dps)
 }
 
-func reduce(e *State, T miniprofiler.Timer, series *Results, F func(Series, ...float64) float64, args ...float64) (*Results, error) {
+func reduce(e *State, T miniprofiler.Timer, series *Results, async bool, F func(Series, ...float64) float64, args ...float64) (*Results, error) {
 	res := *series
 	res.Results = nil
+	var wg sync.WaitGroup
+	lock := sync.Mutex{}
+	panics := make(chan interface{}, len(series.Results))
 	for _, s := range series.Results {
 		switch t := s.Value.(type) {
 		case Series:
 			if len(t) == 0 {
 				continue
 			}
-			s.Value = Number(F(t, args...))
-			res.Results = append(res.Results, s)
+			if async {
+				wg.Add(1)
+				go func(s *Result) {
+					defer wg.Done()
+					defer func() {
+						if r := recover(); r != nil {
+							panics <- r
+						}
+					}()
+					v := Number(F(t, args...))
+					lock.Lock()
+					s.Value = v
+					res.Results = append(res.Results, s)
+					lock.Unlock()
+				}(s)
+			} else {
+				s.Value = Number(F(t, args...))
+				res.Results = append(res.Results, s)
+			}
 		default:
 			panic(fmt.Errorf("expr: expected a series"))
 		}
+	}
+	//fmt.Println("Waiting... Goroutine count:", runtime.NumGoroutine(), e)
+	if async {
+		wg.Wait()
+	}
+	//fmt.Println("Done Waiting!")
+	var firstPanic interface{}
+	select {
+	case firstPanic = <-panics:
+		return nil, fmt.Errorf("%v", firstPanic)
+	default:
+		// No Panics
 	}
 	return &res, nil
 }
@@ -764,7 +797,7 @@ func Abs(e *State, T miniprofiler.Timer, series *Results) *Results {
 }
 
 func Avg(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, avg)
+	return reduce(e, T, series, false, avg)
 }
 
 // avg returns the mean of x.
@@ -789,7 +822,7 @@ func Count(e *State, T miniprofiler.Timer, query, sduration, eduration string) (
 }
 
 func Sum(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, sum)
+	return reduce(e, T, series, false, sum)
 }
 
 func sum(dps Series, args ...float64) (a float64) {
@@ -820,7 +853,7 @@ func Des(e *State, T miniprofiler.Timer, series *Results, alpha float64, beta fl
 }
 
 func Streak(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, streak)
+	return reduce(e, T, series, false, streak)
 }
 
 func streak(dps Series, args ...float64) (a float64) {
@@ -848,7 +881,7 @@ func streak(dps Series, args ...float64) (a float64) {
 }
 
 func Dev(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, dev)
+	return reduce(e, T, series, false, dev)
 }
 
 // dev returns the sample standard deviation of x.
@@ -865,7 +898,7 @@ func dev(dps Series, args ...float64) (d float64) {
 }
 
 func Length(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, length)
+	return reduce(e, T, series, false, length)
 }
 
 func length(dps Series, args ...float64) (a float64) {
@@ -873,7 +906,7 @@ func length(dps Series, args ...float64) (a float64) {
 }
 
 func Last(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, last)
+	return reduce(e, T, series, false, last)
 }
 
 func last(dps Series, args ...float64) (a float64) {
@@ -888,7 +921,7 @@ func last(dps Series, args ...float64) (a float64) {
 }
 
 func First(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, first)
+	return reduce(e, T, series, false, first)
 }
 
 func first(dps Series, args ...float64) (a float64) {
@@ -903,7 +936,7 @@ func first(dps Series, args ...float64) (a float64) {
 }
 
 func Since(e *State, T miniprofiler.Timer, series *Results) (*Results, error) {
-	return reduce(e, T, series, since)
+	return reduce(e, T, series, false, since)
 }
 
 func since(dps Series, args ...float64) (a float64) {
@@ -919,7 +952,7 @@ func since(dps Series, args ...float64) (a float64) {
 }
 
 func Forecast_lr(e *State, T miniprofiler.Timer, series *Results, y float64) (r *Results, err error) {
-	return reduce(e, T, series, forecast_lr, y)
+	return reduce(e, T, series, true, forecast_lr, y)
 }
 
 // forecast_lr returns the number of seconds a linear regression predicts the
@@ -956,19 +989,19 @@ func forecast_lr(dps Series, args ...float64) float64 {
 }
 
 func Percentile(e *State, T miniprofiler.Timer, series *Results, p float64) (r *Results, err error) {
-	return reduce(e, T, series, percentile, p)
+	return reduce(e, T, series, false, percentile, p)
 }
 
 func Min(e *State, T miniprofiler.Timer, series *Results) (r *Results, err error) {
-	return reduce(e, T, series, percentile, 0)
+	return reduce(e, T, series, false, percentile, 0)
 }
 
 func Median(e *State, T miniprofiler.Timer, series *Results) (r *Results, err error) {
-	return reduce(e, T, series, percentile, .5)
+	return reduce(e, T, series, false, percentile, .5)
 }
 
 func Max(e *State, T miniprofiler.Timer, series *Results) (r *Results, err error) {
-	return reduce(e, T, series, percentile, 1)
+	return reduce(e, T, series, false, percentile, 1)
 }
 
 // percentile returns the value at the corresponding percentile between 0 and 1.
