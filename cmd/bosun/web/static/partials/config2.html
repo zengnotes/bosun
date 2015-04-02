@@ -1,0 +1,59 @@
+<style type="text/css">
+
+.ace_editor  {
+ 	height : 500px;
+	width: 130%
+	font-family: Menlo, Courier New, monospace;
+	font-size: 11pt;
+	border: 1px solid #ccc;
+	margin-bottom: 15px;
+	background: inherit;
+}
+
+</style>
+<label style="float:left; margin-right:15px;">Jump to:</label>
+<div class="dropdown" ng-repeat="(type,list) in items" style="float:left; margin-right:5px;margin-bottom:15px;">
+  <button class="btn btn-primary dropdown-toggle" type="button" id="itemSelector" data-toggle="dropdown" aria-expanded="true">
+ 	{{type}}
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" role="menu" aria-labelledby="itemSelector">
+    <li role="presentation" ng-repeat="item in list | orderBy:'toString()'"><a role="menuitem" tabindex="-1" ng-click="scrollTo(type,item);">{{item}}</a></li>
+  </ul>
+</div>
+<div class='btn btn-default' style="float:right;margin-left:5px;">Save</div>
+<div class='btn btn-default' style="float:right;margin-left:5px;">Validate</div>
+
+<div ui-ace="{ onLoad : aceLoaded,showGutter: false }" ng-model="config_text" style="clear:both;"></div>
+
+<div class="row">
+	<div class="col-lg-12">
+		<form class="form-inline">
+			<div class="form-group">
+				<label class="control-label">From</label>
+				<input type="text" class="form-control" style="width:10em" ng-model="fromDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
+			</div>
+			<div class="form-group">
+				<input type="text" class="form-control" style="width:10em" ng-model="fromTime" ng-change="setInterval()" placeholder="HH:MM">
+			</div>
+			<div class="form-group">
+				<label class="control-label">To</label>
+				<input type="text" class="form-control" style="width:10em" ng-model="toDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
+			</div>
+			<div class="form-group">
+				<input type="text" class="form-control" style="width:10em" ng-model="toTime" ng-change="setInterval()" placeholder="HH:MM">
+			</div>
+			<div class="form-group">
+				<label class="control-label">Intervals</label>
+				<input type="number" min="2" step="1" style="width:7em" class="form-control" ng-model="intervals" ng-change="setInterval()" ng-disabled="!fromDate || !toDate" tooltip title="Number of evaluations between timespan.">
+			</div>
+			<div class="form-group">
+				<label class="control-label">Step Duration (m)</label>
+				<input type="number" min="1" step="1" style="width:7em" class="form-control" ng-model="duration" ng-change="setDuration()" ng-disabled="!fromDate || !toDate" tooltip title="Step duration in minutes between intervals.">
+			</div>
+			<div class="form-group">
+				<button class="btn btn-primary" ng-click="test()">Test</button>
+			</div>
+		</form>
+	</div>
+</div>

@@ -11,6 +11,7 @@ var bosunApp = angular.module('bosunApp', [
     'bosunControllers',
     'mgcrea.ngStrap',
     'ngSanitize',
+    'ui.ace',
 ]);
 bosunApp.config(['$routeProvider', '$locationProvider', function ($routeProvider, $locationProvider) {
     $locationProvider.html5Mode(true);
@@ -48,6 +49,10 @@ bosunApp.config(['$routeProvider', '$locationProvider', function ($routeProvider
         title: 'Configuration',
         templateUrl: 'partials/config.html',
         controller: 'ConfigCtrl'
+    }).when('/config2', {
+        title: 'Configuration',
+        templateUrl: 'partials/config2.html',
+        controller: 'Config2Ctrl'
     }).when('/action', {
         title: 'Action',
         templateUrl: 'partials/action.html',
@@ -328,6 +333,64 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
         });
     };
     $scope.set();
+}]);
+bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$route', function ($scope, $http, $location, $route) {
+    var search = $location.search();
+    var current = search.config_text;
+    try {
+        current = atob(current);
+    }
+    catch (e) {
+        current = '';
+    }
+    if (!current) {
+        var def = '';
+        $http.get('/api/config').success(function (data) {
+            def = data;
+        }).finally(function () {
+            $location.search('config_text', btoa(def));
+        });
+        return;
+    }
+    var editor;
+    var parseItems = function (configText) {
+        var re = /^\s*(alert|template|notification|lookup|macro)\s+([\w\-\.\$]+)\s*\{/gm;
+        var match;
+        var items = {};
+        while (match = re.exec(configText)) {
+            var type = match[1];
+            var name = match[2];
+            var list = items[type];
+            if (!list) {
+                list = [];
+                items[type] = list;
+            }
+            list.push(name);
+        }
+        return items;
+    };
+    $scope.aceLoaded = function (_editor) {
+        editor = _editor;
+        editor.getSession().setUseWrapMode(true);
+        editor.on("blur", function () {
+            $scope.$apply(function () {
+                $scope.items = parseItems($scope.config_text);
+            });
+        });
+    };
+    $scope.config_text = current;
+    $scope.items = parseItems(current);
+    $scope.scrollTo = function (type, name) {
+        var searchRegex = new RegExp("^\\s*" + type + "\\s+" + name + "\\s*\\{", "gm");
+        editor.find(searchRegex, {
+            backwards: false,
+            wrap: true,
+            caseSensitive: false,
+            wholeWord: false,
+            regExp: true
+        });
+    };
+    return $scope;
 }]);
 bosunControllers.controller('DashboardCtrl', ['$scope', '$http', '$location', function ($scope, $http, $location) {
     var search = $location.search();
