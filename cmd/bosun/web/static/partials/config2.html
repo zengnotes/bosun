@@ -22,17 +22,17 @@
   </ul>
 </div>
 <div class='btn btn-default' style="float:right;margin-left:5px;">Save</div>
-<div class='btn btn-default' style="float:right;margin-left:5px;">Validate</div>
+<div class='btn btn-default' style="float:right;margin-left:5px;" ng-click="validate()">Validate</div>
 
 <div class="row" ng-show="validationResult">
 	<div class="col-lg-12">
-		<div class="alert alert-dismissible" ng-class="result == 'Valid' ? 'alert-success' : 'alert-danger'">
+		<div class="alert alert-dismissible" ng-class="validationResult == 'Valid' ? 'alert-success' : 'alert-danger'">
 		<button type="button" class="close" aria-label="Close" ng-click="validationResult=''"><span aria-hidden="true">&times;</span></button>
 		{{validationResult}}</div>
 	</div>
 </div>
 
-<div ui-ace="{ onLoad : aceLoaded,showGutter: false }" ng-model="config_text" style="clear:both;" ></div>
+<div ui-ace="{ onLoad : aceLoaded}" ng-model="config_text" style="clear:both;" ></div>
 <div class="row">
 	<div class="col-lg-12">
 		<form class="form-inline">

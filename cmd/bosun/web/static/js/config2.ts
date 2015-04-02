@@ -5,6 +5,7 @@ interface IConfig2Scope extends ng.IScope {
 	items: { [type: string]: string[]; };
 	scrollTo: (type:string,name:string) => void;
 	aceLoaded: (editor:any) => void;
+	validate: () => void;
 	validationResult: string;
 	selectAlert: (alert:string) => void;
 	
@@ -128,6 +129,25 @@ bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$ro
 	$scope.selectAlert = (alert:string) =>{
 		$scope.selected_alert = alert;
 		$location.search("alert",alert);
+	}
+	
+	var line_re = /test:(\d+)/;
+	$scope.validate = () => {
+		$http.get('/api/config_test?config_text=' + encodeURIComponent($scope.config_text))
+			.success((data) => {
+				if (data == "") {
+					$scope.validationResult = "Valid";
+				} else {
+					$scope.validationResult = data;
+					var m = data.match(line_re);
+					if (angular.isArray(m) && (m.length > 1)) {
+						editor.gotoLine(m[1])
+					}
+				}
+			})
+			.error((error) => {
+				$scope.validationResult = 'Error validating: ' + error;
+			});
 	}
 	
 	return $scope;

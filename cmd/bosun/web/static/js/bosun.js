@@ -429,6 +429,23 @@ bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$ro
         $scope.selected_alert = alert;
         $location.search("alert", alert);
     };
+    var line_re = /test:(\d+)/;
+    $scope.validate = function () {
+        $http.get('/api/config_test?config_text=' + encodeURIComponent($scope.config_text)).success(function (data) {
+            if (data == "") {
+                $scope.validationResult = "Valid";
+            }
+            else {
+                $scope.validationResult = data;
+                var m = data.match(line_re);
+                if (angular.isArray(m) && (m.length > 1)) {
+                    editor.gotoLine(m[1]);
+                }
+            }
+        }).error(function (error) {
+            $scope.validationResult = 'Error validating: ' + error;
+        });
+    };
     return $scope;
 }]);
 bosunControllers.controller('DashboardCtrl', ['$scope', '$http', '$location', function ($scope, $http, $location) {
