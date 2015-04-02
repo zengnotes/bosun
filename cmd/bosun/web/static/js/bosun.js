@@ -50,9 +50,10 @@ bosunApp.config(['$routeProvider', '$locationProvider', function ($routeProvider
         templateUrl: 'partials/config.html',
         controller: 'ConfigCtrl'
     }).when('/config2', {
-        title: 'Configuration',
+        title: 'Configuration2',
         templateUrl: 'partials/config2.html',
-        controller: 'Config2Ctrl'
+        controller: 'Config2Ctrl',
+        reloadOnSearch: false
     }).when('/action', {
         title: 'Action',
         templateUrl: 'partials/action.html',
@@ -334,29 +335,27 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
     };
     $scope.set();
 }]);
-bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$route', function ($scope, $http, $location, $route) {
+bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$route', '$timeout', function ($scope, $http, $location, $route, $timeout) {
     var search = $location.search();
-    var current = search.config_text;
-    try {
-        current = atob(current);
-    }
-    catch (e) {
-        current = '';
-    }
-    if (!current) {
-        var def = '';
-        $http.get('/api/config').success(function (data) {
-            def = data;
-        }).finally(function () {
-            $location.search('config_text', btoa(def));
-        });
-        return;
-    }
-    var editor;
-    var parseItems = function (configText) {
+    $scope.fromDate = search.fromDate || '';
+    $scope.fromTime = search.fromTime || '';
+    $scope.toDate = search.toDate || '';
+    $scope.toTime = search.toTime || '';
+    $scope.intervals = +search.intervals || 5;
+    $scope.duration = +search.duration || null;
+    $scope.config_text = 'Loading config...';
+    $scope.selected_alert = search.alert || '';
+    $scope.items = parseItems();
+    function parseItems() {
+        var configText = $scope.config_text;
         var re = /^\s*(alert|template|notification|lookup|macro)\s+([\w\-\.\$]+)\s*\{/gm;
         var match;
         var items = {};
+        items["alert"] = [];
+        items["template"] = [];
+        items["lookup"] = [];
+        items["notification"] = [];
+        items["macro"] = [];
         while (match = re.exec(configText)) {
             var type = match[1];
             var name = match[2];
@@ -368,18 +367,30 @@ bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$ro
             list.push(name);
         }
         return items;
-    };
+    }
+    var editor;
+    $http.get('/api/config').success(function (data) {
+        $scope.config_text = data;
+        $scope.items = parseItems();
+        if (!$scope.selected_alert && $scope.items["alert"].length) {
+            $scope.selected_alert = $scope.items["alert"][0];
+        }
+        $timeout(function () {
+            //can't scroll editor until after control is updated. Defer it.
+            $scope.scrollTo("alert", $scope.selected_alert);
+        });
+    }).error(function (data) {
+        $scope.validationResult = "Error fetching config: " + data;
+    });
     $scope.aceLoaded = function (_editor) {
         editor = _editor;
         editor.getSession().setUseWrapMode(true);
         editor.on("blur", function () {
             $scope.$apply(function () {
-                $scope.items = parseItems($scope.config_text);
+                $scope.items = parseItems();
             });
         });
     };
-    $scope.config_text = current;
-    $scope.items = parseItems(current);
     $scope.scrollTo = function (type, name) {
         var searchRegex = new RegExp("^\\s*" + type + "\\s+" + name + "\\s*\\{", "gm");
         editor.find(searchRegex, {
@@ -389,6 +400,34 @@ bosunControllers.controller('Config2Ctrl', ['$scope', '$http', '$location', '$ro
             wholeWord: false,
             regExp: true
         });
+        if (type == "alert") {
+            $scope.selectAlert(name);
+        }
+    };
+    $scope.setInterval = function () {
+        var from = moment.utc($scope.fromDate + ' ' + $scope.fromTime);
+        var to = moment.utc($scope.toDate + ' ' + $scope.toTime);
+        if (!from.isValid() || !to.isValid()) {
+            return;
+        }
+        var diff = from.diff(to);
+        if (!diff) {
+            return;
+        }
+        var intervals = +$scope.intervals;
+        if (intervals < 2) {
+            return;
+        }
+        diff /= 1000 * 60;
+        var d = Math.abs(Math.round(diff / intervals));
+        if (d < 1) {
+            d = 1;
+        }
+        $scope.duration = d;
+    };
+    $scope.selectAlert = function (alert) {
+        $scope.selected_alert = alert;
+        $location.search("alert", alert);
     };
     return $scope;
 }]);

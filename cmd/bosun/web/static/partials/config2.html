@@ -24,24 +24,29 @@
 <div class='btn btn-default' style="float:right;margin-left:5px;">Save</div>
 <div class='btn btn-default' style="float:right;margin-left:5px;">Validate</div>
 
-<div ui-ace="{ onLoad : aceLoaded,showGutter: false }" ng-model="config_text" style="clear:both;"></div>
+<div class="row" ng-show="validationResult">
+	<div class="col-lg-12">
+		<div class="alert alert-dismissible" ng-class="result == 'Valid' ? 'alert-success' : 'alert-danger'">
+		<button type="button" class="close" aria-label="Close" ng-click="validationResult=''"><span aria-hidden="true">&times;</span></button>
+		{{validationResult}}</div>
+	</div>
+</div>
 
+<div ui-ace="{ onLoad : aceLoaded,showGutter: false }" ng-model="config_text" style="clear:both;" ></div>
 <div class="row">
 	<div class="col-lg-12">
 		<form class="form-inline">
 			<div class="form-group">
 				<label class="control-label">From</label>
-				<input type="text" class="form-control" style="width:10em" ng-model="fromDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
-			</div>
-			<div class="form-group">
-				<input type="text" class="form-control" style="width:10em" ng-model="fromTime" ng-change="setInterval()" placeholder="HH:MM">
+				<input type="text" class="form-control" style="width:9em" ng-model="fromDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
+				<input type="text" class="form-control" style="width:9em" ng-model="fromTime" ng-change="setInterval()" placeholder="HH:MM">
 			</div>
 			<div class="form-group">
 				<label class="control-label">To</label>
-				<input type="text" class="form-control" style="width:10em" ng-model="toDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
+				<input type="text" class="form-control" style="width:9em" ng-model="toDate" ng-change="setInterval()" placeholder="yyyy-mm-dd" bs-datepicker data-date-format="yyyy-MM-dd" data-date-type="string">
 			</div>
 			<div class="form-group">
-				<input type="text" class="form-control" style="width:10em" ng-model="toTime" ng-change="setInterval()" placeholder="HH:MM">
+				<input type="text" class="form-control" style="width:9em" ng-model="toTime" ng-change="setInterval()" placeholder="HH:MM">
 			</div>
 			<div class="form-group">
 				<label class="control-label">Intervals</label>
@@ -51,8 +56,24 @@
 				<label class="control-label">Step Duration (m)</label>
 				<input type="number" min="1" step="1" style="width:7em" class="form-control" ng-model="duration" ng-change="setDuration()" ng-disabled="!fromDate || !toDate" tooltip title="Step duration in minutes between intervals.">
 			</div>
+			
+		</form>
+	</div>
+</div>
+<div class="row">
+	<div class="col-lg-12">
+		</p>
+		<form class="form-inline">
 			<div class="form-group">
-				<button class="btn btn-primary" ng-click="test()">Test</button>
+				<label class="control-label">Email</label>
+				<input type="email" class="form-control" style="width:20em" ng-model="email">
+			</div>
+			<div class="form-group">
+				<label class="control-label">Template Group</label>
+				<input type="text" class="form-control" style="width:20em" ng-model="template_group" tooltip title="Set which result to use for the template by setting an opentsdb group (aka tagset) in the format of k=v,m=o. The first result for which the specified group is a subset of a result is used. If no results are a subset of the specified group, then the first result is chosen.">
+			</div>
+			<div class="form-group">
+				<button class="btn btn-primary" ng-click="test()">Test {{selected_alert}}</button>
 			</div>
 		</form>
 	</div>

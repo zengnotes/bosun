@@ -61,9 +61,10 @@ bosunApp.config(['$routeProvider', '$locationProvider', function($routeProvider:
 			controller: 'ConfigCtrl',
 		}).
 		when('/config2', {
-			title: 'Configuration',
+			title: 'Configuration2',
 			templateUrl: 'partials/config2.html',
 			controller: 'Config2Ctrl',
+			reloadOnSearch: false,
 		}).
 		when('/action', {
 			title: 'Action',
